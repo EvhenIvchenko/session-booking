@@ -34,16 +34,6 @@ const poppins = localFont({
 const kaiseiTokumin = localFont({
   src: [
     {
-      path: '../../public/fonts/KaiseiTokumin-Regular.woff2',
-      weight: '400',
-      style: 'normal',
-    },
-    {
-      path: '../../public/fonts/KaiseiTokumin-Medium.woff2',
-      weight: '500',
-      style: 'normal',
-    },
-    {
       path: '../../public/fonts/KaiseiTokumin-Bold.woff2',
       weight: '700',
       style: 'normal',
