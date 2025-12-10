@@ -101,7 +101,10 @@ export function TimeSelector({ selectedDate, selectedTime, onTimeSelect }: TimeS
 
   // Auto-scroll to first available slot on date change
   useEffect(() => {
-    if (!scrollContainerRef.current || !selectedDate) return;
+    if (!scrollContainerRef.current || !selectedDate || !containerWidth) return;
+
+    // Wait for virtualizer to have items before scrolling
+    if (virtualizer.getVirtualItems().length === 0) return;
 
     // For today's date, always scroll to first available time
     if (isToday) {
@@ -121,7 +124,7 @@ export function TimeSelector({ selectedDate, selectedTime, onTimeSelect }: TimeS
         virtualizer.scrollToIndex(0, { align: 'start', behavior: 'auto' });
       });
     }
-  }, [selectedDate, timeSlots, virtualizer, isToday]);
+  }, [selectedDate, timeSlots, virtualizer, isToday, containerWidth]);
 
   // Button Scroll Handler
   const scroll = (direction: 'left' | 'right') => {

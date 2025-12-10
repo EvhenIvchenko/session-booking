@@ -101,7 +101,7 @@ export function DateSelector({ selectedDate, selectedTime, onDateSelect }: DateS
 
   // Scroll back to selected date when time is chosen
   useEffect(() => {
-    if (!selectedDate || !selectedTime) return;
+    if (!selectedDate || !selectedTime || !containerWidth) return;
 
     const selectedIndex = dates.findIndex(({ date }) => isSameDay(date, selectedDate));
     if (selectedIndex >= 0) {
@@ -109,7 +109,7 @@ export function DateSelector({ selectedDate, selectedTime, onDateSelect }: DateS
         virtualizer.scrollToIndex(selectedIndex, { align: 'center', behavior: 'smooth' });
       });
     }
-  }, [selectedTime, selectedDate, dates, virtualizer]);
+  }, [selectedTime, selectedDate, dates, virtualizer, containerWidth]);
 
   // Scroll Button Handler
   const scroll = (direction: 'left' | 'right') => {
