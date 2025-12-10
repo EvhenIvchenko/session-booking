@@ -59,10 +59,7 @@ export default function RootLayout({
       suppressHydrationWarning
       className={`${poppins.variable} ${kaiseiTokumin.variable}`}
     >
-      <body
-        className="font-poppins antialiased"
-        suppressHydrationWarning
-      >
+      <body className="font-poppins antialiased">
         {children}
       </body>
     </html>

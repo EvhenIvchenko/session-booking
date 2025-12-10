@@ -47,6 +47,7 @@ export function BookingCard() {
               width={120}
               height={120}
               priority
+              sizes="120px"
               className="h-full w-full object-cover"
             />
           </div>
