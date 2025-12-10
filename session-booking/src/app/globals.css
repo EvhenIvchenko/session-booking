@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+:root {
+  --color-accent: #DE3A6B;
+  --color-hero: #E28F11;
+  --color-hero-dark: #AA580D;
+  --color-hero-decoration: #AD5707;
+  --color-hero-border: #FFAD32;
+  --color-selection: #F7F7FC;
+  --color-selection-hover: #EEEEF8;
+  --color-text-primary: #16171B;
+  --color-text-disabled: #C0C1D1;
+  --color-border: #E8EBF4;
+}
+
+/* Tailwind v4 syntax */
+@utility font-poppins {
+  font-family: var(--font-poppins), system-ui, sans-serif;
+}
+
+@utility font-kaisei {
+  font-family: var(--font-kaisei), serif;
+}
