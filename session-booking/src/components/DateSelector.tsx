@@ -1,239 +1,267 @@
 'use client';
 
+import { useVirtualizer } from '@tanstack/react-virtual';
 import clsx from 'clsx';
 import {
-  useEffect, useMemo, useRef, useState,
+  useCallback, useEffect, useMemo, useRef, useState,
 } from 'react';
 
-import { useOptimalScrollWidth } from '@/hooks/useOptimalScrollWidth';
+import { useResponsiveLayout, useDragScroll } from '@/hooks/useHorizontalScrollLayout';
 import { generateDateRange, isSameDay } from '@/utils/dateUtils';
 
 import { Icon } from './Icon';
 
+import type { TimeSlot } from '@/types/booking';
+
 interface DateSelectorProps {
   selectedDate: Date | null;
+  selectedTime: TimeSlot | null;
   onDateSelect: (date: Date) => void;
-  scrollToSelectionSignal?: number;
 }
 
-/**
- * Horizontal scrollable date selector component
- * Displays 6 weeks of dates grouped by month
- */
-export function DateSelector({ selectedDate, onDateSelect, scrollToSelectionSignal }: DateSelectorProps) {
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
-    const [showLeftArrow, setShowLeftArrow] = useState(false);
-    const [showRightArrow, setShowRightArrow] = useState(true);
-    const [currentMonth, setCurrentMonth] = useState<string>('');
+// Configuration specific to dates
+const DATE_CONFIG = {
+  base: { width: 64, height: 64, gap: 8 },
+  xl: { width: 72, height: 72, gap: 12 },
+  reservedSpace: { md: 70, base: 16 },
+  overscan: 5,
+  drag: { threshold: 5, multiplier: 1.5 },
+  hintWidth: { md: 0, base: 20 },
+};
 
-    const optimalWidth = useOptimalScrollWidth({
-      cellWidth: 64,
-      gap: 8,
-      containerPadding: 40,
-      minHintWidth: 22,
+const HEADER_HEIGHT = 24;
+
+/**
+ * Horizontal date selector with virtualization and drag-to-scroll
+ * Displays dates for the next 3 months with sticky month headers
+ * @param selectedDate - Currently selected date
+ * @param selectedTime - Currently selected time (triggers scroll back to selected date)
+ * @param onDateSelect - Callback when date is selected
+ */
+export function DateSelector({ selectedDate, selectedTime, onDateSelect }: DateSelectorProps) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  const dates = useMemo(() => generateDateRange(), []);
+  const [currentMonth, setCurrentMonth] = useState<string>('');
+  const [showArrows, setShowArrows] = useState({ left: false, right: true });
+
+  // Use shared hooks with date-specific config
+  const {
+    itemWidth, itemHeight, gap, containerWidth,
+  } = useResponsiveLayout(wrapperRef, DATE_CONFIG);
+  const { isDragging, events: dragEvents } = useDragScroll(scrollContainerRef, {
+    dragConfig: DATE_CONFIG.drag,
+  });
+
+  const virtualizer = useVirtualizer({
+    horizontal: true,
+    count: dates.length,
+    getScrollElement: () => scrollContainerRef.current,
+    estimateSize: () => itemWidth,
+    overscan: DATE_CONFIG.overscan,
+    gap,
+  });
+
+  // Force re-measure when layout changes
+  useEffect(() => {
+    virtualizer.measure();
+  }, [itemWidth, gap, virtualizer]);
+
+  // Update scroll position, arrows visibility, and current month
+  const checkScrollPosition = useCallback(() => {
+    if (!scrollContainerRef.current) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+
+    setShowArrows({
+      left: scrollLeft > 0,
+      right: scrollLeft < scrollWidth - clientWidth - 1,
     });
 
-    const [isDragging, setIsDragging] = useState(false);
-    const [isMouseDown, setIsMouseDown] = useState(false);
-    const [startX, setStartX] = useState(0);
-    const [scrollLeftStart, setScrollLeftStart] = useState(0);
+    const virtualItems = virtualizer.getVirtualItems();
 
-    const dates = useMemo(() => generateDateRange(), []);
+    // Find first visible item (item end > scroll position)
+    const firstVisibleItem = virtualItems.find((item) => {
+      const itemEnd = item.start + item.size;
+      return itemEnd > scrollLeft;
+    });
 
-    const checkScrollPosition = () => {
-      if (!scrollContainerRef.current) return;
-
-      const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
-      setShowLeftArrow(scrollLeft > 0);
-      setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 10);
-
-      const buttonWidth = 64 + 8;
-      const firstVisibleIndex = Math.floor(scrollLeft / buttonWidth);
-      const month = dates[firstVisibleIndex]?.month || dates[0].month;
-      setCurrentMonth(month);
-    };
-
-    useEffect(() => {
-      checkScrollPosition();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    useEffect(() => {
-      if (!scrollContainerRef.current || !selectedDate || !scrollToSelectionSignal) return;
-
-      const selectedIndex = dates.findIndex((d) => isSameDay(d.date, selectedDate));
-      if (selectedIndex === -1) return;
-
-      const item = scrollContainerRef.current.firstElementChild as HTMLElement;
-      const itemWidth = item ? item.offsetWidth + 8 : (64 + 8);
-
-      const { clientWidth } = scrollContainerRef.current;
-      // Center selected item: position - half screen + half item
-      const scrollPos = selectedIndex * itemWidth - (clientWidth / 2) + (itemWidth / 2);
-
-      scrollContainerRef.current.scrollTo({
-        left: Math.max(0, scrollPos),
-        behavior: 'smooth',
-      });
-    }, [scrollToSelectionSignal, selectedDate, dates]);
-
-    // Minimum distance before dragging starts (prevents accidental drag on click)
-    const DRAG_THRESHOLD = 5;
-
-    const handleMouseDown = (e: React.MouseEvent) => {
-      if (!scrollContainerRef.current) return;
-      setIsMouseDown(true);
-      setStartX(e.pageX - scrollContainerRef.current.offsetLeft);
-      setScrollLeftStart(scrollContainerRef.current.scrollLeft);
-    };
-
-    const handleMouseMove = (e: React.MouseEvent) => {
-      if (!isMouseDown || !scrollContainerRef.current) return;
-
-      const x = e.pageX - scrollContainerRef.current.offsetLeft;
-      const distance = Math.abs(x - startX);
-
-      if (!isDragging && distance > DRAG_THRESHOLD) {
-        setIsDragging(true);
+    if (firstVisibleItem) {
+      const dateItem = dates[firstVisibleItem.index];
+      if (dateItem) {
+        setCurrentMonth((prev) => (prev !== dateItem.month ? dateItem.month : prev));
       }
+    }
+  }, [dates, virtualizer]);
 
-      if (isDragging) {
-        e.preventDefault();
-        // 1.5x multiplier makes dragging feel more responsive
-        const walk = (x - startX) * 1.5;
-        scrollContainerRef.current.scrollLeft = scrollLeftStart - walk;
-      }
-    };
+  // Attach scroll listener
+  useEffect(() => {
+    checkScrollPosition();
+  }, [containerWidth, checkScrollPosition, virtualizer]);
 
-    const handleMouseUp = () => {
-      setIsMouseDown(false);
-      setIsDragging(false);
-    };
+  // Scroll back to selected date when time is chosen
+  useEffect(() => {
+    if (!selectedDate || !selectedTime) return;
 
-    const handleMouseLeave = () => {
-      setIsMouseDown(false);
-      setIsDragging(false);
-    };
-
-    const scroll = (direction: 'left' | 'right') => {
-      if (!scrollContainerRef.current) return;
-
-      const item = scrollContainerRef.current.firstElementChild as HTMLElement;
-      const itemWidth = item ? item.offsetWidth + 8 : (64 + 8);
-
-      const { clientWidth } = scrollContainerRef.current;
-
-      const visibleItems = Math.floor(clientWidth / itemWidth);
-
-      // Scroll N-1 items to keep context (at least 1 item)
-      const itemsToScroll = Math.max(1, visibleItems - 1);
-      const scrollAmount = itemsToScroll * itemWidth;
-
-      const newScrollLeft = direction === 'left'
-        ? scrollContainerRef.current.scrollLeft - scrollAmount
-        : scrollContainerRef.current.scrollLeft + scrollAmount;
-
-      scrollContainerRef.current.scrollTo({
-        left: newScrollLeft,
-        behavior: 'smooth',
+    const selectedIndex = dates.findIndex(({ date }) => isSameDay(date, selectedDate));
+    if (selectedIndex >= 0) {
+      requestAnimationFrame(() => {
+        virtualizer.scrollToIndex(selectedIndex, { align: 'center', behavior: 'smooth' });
       });
-    };
+    }
+  }, [selectedTime, selectedDate, dates, virtualizer]);
 
-    return (
-      <div className="relative w-full">
-        <div className="relative flex items-center justify-center gap-6 2xl:gap-7 [@media(min-width:1920px)]:gap-8">
-          <button
-            type="button"
-            onClick={() => scroll('left')}
-            disabled={!showLeftArrow}
-            className="hidden shrink-0 mt-6 transition-colors disabled:cursor-not-allowed md:block"
-            aria-label="Scroll left"
-          >
-            <Icon
-              name="arrow-left"
-              width={9}
-              height={17}
-              fill={showLeftArrow ? 'var(--color-text-primary)' : 'var(--color-text-disabled)'}
-            />
-          </button>
+  // Scroll Button Handler
+  const scroll = (direction: 'left' | 'right') => {
+    if (!scrollContainerRef.current) return;
 
-          <div
-            className="relative overflow-hidden md:flex-none md:w-[424px] 2xl:w-[568px] [@media(min-width:1920px)]:w-[724px]"
-            style={optimalWidth ? { maxWidth: `${optimalWidth}px` } : undefined}
-          >
-            {currentMonth && (
+    const { clientWidth } = scrollContainerRef.current;
+    const itemTotalWidth = itemWidth + gap;
+    const itemsToScroll = Math.max(1, Math.floor(clientWidth / itemTotalWidth) - 1);
+
+    const [firstVisible] = virtualizer.getVirtualItems();
+    if (!firstVisible) return;
+
+    const targetIndex = direction === 'left'
+      ? Math.max(0, firstVisible.index - itemsToScroll)
+      : Math.min(dates.length - 1, firstVisible.index + itemsToScroll);
+
+    virtualizer.scrollToIndex(targetIndex, { align: 'start', behavior: 'smooth' });
+  };
+
+  const totalContainerHeight = HEADER_HEIGHT + itemHeight;
+
+  return (
+    <div className="relative w-full" ref={wrapperRef}>
+      <div className="relative flex items-center justify-center md:justify-between">
+
+        {/* Left Navigation */}
+        <button
+          type="button"
+          onClick={() => scroll('left')}
+          disabled={!showArrows.left}
+          className="hidden shrink-0 mt-6 p-2 transition-opacity disabled:opacity-30 md:block"
+          aria-label="Scroll left"
+        >
+          <Icon
+            name="arrow-left"
+            width={9}
+            height={17}
+            fill={showArrows.left ? 'var(--color-text-primary)' : 'var(--color-text-disabled)'}
+          />
+        </button>
+
+        {/* Main List Container */}
+        <div
+          className="relative overflow-hidden transition-[width]"
+          style={{
+            width: containerWidth ? `${containerWidth}px` : '100%',
+            maxWidth: '100%',
+          }}
+        >
+          {/* Sticky Month Label */}
+          {currentMonth && (
             <div className="pointer-events-none absolute left-0 top-2 z-10 flex h-5 items-center bg-white pr-2">
-              <span className="text-sm font-medium text-gray-500">
-                {currentMonth}
-              </span>
+              <span className="text-sm font-medium text-gray-500">{currentMonth}</span>
             </div>
-            )}
+          )}
 
+          {/* Scrollable Viewport */}
+          <div
+            ref={scrollContainerRef}
+            role="presentation"
+            onScroll={checkScrollPosition}
+            {...dragEvents}
+            className={clsx(
+              'flex w-full overflow-x-auto py-2 pl-1 md:pl-0',
+              'scrollbar-hide scroll-pr-6', // Ensure utility classes exist for hiding scrollbar
+              !isDragging && 'snap-x snap-mandatory',
+              isDragging && 'select-none cursor-grabbing',
+            )}
+            style={{ scrollbarWidth: 'none' }} // Fallback for Firefox
+          >
             <div
-              ref={scrollContainerRef}
-              role="presentation"
-              onScroll={checkScrollPosition}
-              onMouseMove={handleMouseMove}
-              onMouseUp={handleMouseUp}
-              onMouseLeave={handleMouseLeave}
-              className={clsx(
-                'flex w-full gap-2 [@media(min-width:1920px)]:gap-3 overflow-x-auto py-2 pl-1 md:pl-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden scroll-pr-6',
-                !isDragging && 'snap-x snap-mandatory',
-                isDragging && 'select-none',
-              )}
+              style={{
+                width: `${virtualizer.getTotalSize()}px`,
+                height: `${totalContainerHeight}px`,
+                position: 'relative',
+              }}
             >
-              {dates.map((dateItem, index) => {
+              {virtualizer.getVirtualItems().map((virtualItem) => {
+                const dateItem = dates[virtualItem.index];
                 const isSelected = isSameDay(dateItem.date, selectedDate);
-                const isFirstOfMonth = index === 0 || dates[index - 1]?.month !== dateItem.month;
-                const showMonthLabel = isFirstOfMonth && dateItem.month !== currentMonth;
+                const isFirstOfMonth = virtualItem.index === 0
+                  || dates[virtualItem.index - 1]?.month !== dateItem.month;
 
                 return (
-                  <div key={dateItem.date.toISOString()} className="flex shrink-0 snap-start flex-col gap-1">
+                  <div
+                    key={dateItem.date.toISOString()}
+                    className="absolute top-0 left-0 flex flex-col gap-1 snap-start"
+                    style={{
+                      transform: `translateX(${virtualItem.start}px)`,
+                      width: `${virtualItem.size}px`,
+                    }}
+                  >
+                    {/* Month Label Placeholder (prevents layout shift) */}
                     <div className="h-5 flex items-center">
-                      {showMonthLabel && (
-                        <span className="text-sm font-medium text-gray-500">
-                          {dateItem.month}
-                        </span>
+                      {isFirstOfMonth && dateItem.month !== currentMonth && (
+                        <span className="text-sm font-medium text-gray-500">{dateItem.month}</span>
                       )}
                     </div>
 
                     <button
                       type="button"
                       onClick={() => onDateSelect(dateItem.date)}
-                      onMouseDown={handleMouseDown}
+                      style={{ height: `${itemHeight}px` }}
                       className={clsx(
-                        'flex h-16 w-16 flex-col items-center justify-center gap-1 rounded-lg [@media(min-width:1920px)]:h-20 [@media(min-width:1920px)]:w-20',
-                        'focus:border-[var(--color-accent)]',
-                        isSelected && 'border border-[var(--color-selection)] bg-[var(--color-selection)] text-[var(--color-accent)] hover:bg-[var(--color-selection-hover)] hover:border-[var(--color-selection-hover)]',
-                        !isSelected && 'border border-[var(--color-border)] bg-white text-[var(--color-text-primary)] hover:bg-gray-50',
-                        isDragging && 'cursor-grabbing',
+                        'flex w-full flex-col items-center justify-center gap-1 rounded-lg border transition-colors',
+                        'focus:outline-none active:border-[var(--color-accent)] focus:border-[var(--color-accent)]',
+                        isSelected
+                          ? 'border-[var(--color-selection)] bg-[var(--color-selection)] text-[var(--color-accent)]'
+                          : 'border-[var(--color-border)] bg-white text-[var(--color-text-primary)] hover:bg-gray-50',
+                        isDragging && 'pointer-events-none', // Prevent clicking while dragging
                       )}
-                      aria-label={`Select ${dateItem.dayOfWeek}, ${dateItem.month} ${dateItem.dayOfMonth}`}
                     >
-                      <span className={clsx('text-[16px] md:text-xs [@media(min-width:1920px)]:text-sm md:uppercase text-inherit', isSelected ? 'font-medium' : 'font-normal')}>{dateItem.dayOfWeek}</span>
-                      <span className={clsx('text-[16px] md:text-lg [@media(min-width:1920px)]:text-xl text-inherit', isSelected ? 'font-medium' : 'font-normal')}>{dateItem.dayOfMonth}</span>
+                      <span className={clsx(
+                        'text-[16px] md:text-xs text-inherit',
+                        isSelected ? 'font-medium' : 'font-normal',
+                        'xl:text-sm xl:uppercase', // 1920px+ styles
+                      )}
+                      >
+                        {dateItem.dayOfWeek}
+                      </span>
+                      <span className={clsx(
+                        'text-[16px] md:text-lg text-inherit',
+                        isSelected ? 'font-medium' : 'font-normal',
+                        'xl:text-xl', // 1920px+ styles
+                      )}
+                      >
+                        {dateItem.dayOfMonth}
+                      </span>
                     </button>
                   </div>
                 );
               })}
             </div>
           </div>
-
-          <button
-            type="button"
-            onClick={() => scroll('right')}
-            disabled={!showRightArrow}
-            className="hidden shrink-0 mt-6 transition-colors disabled:cursor-not-allowed md:block"
-            aria-label="Scroll right"
-          >
-            <Icon
-              name="arrow-right"
-              width={9}
-              height={17}
-              fill={showRightArrow ? 'var(--color-text-primary)' : 'var(--color-text-disabled)'}
-            />
-          </button>
         </div>
+
+        {/* Right Navigation */}
+        <button
+          type="button"
+          onClick={() => scroll('right')}
+          disabled={!showArrows.right}
+          className="hidden shrink-0 mt-6 p-2 transition-opacity disabled:opacity-30 md:block"
+          aria-label="Scroll right"
+        >
+          <Icon
+            name="arrow-right"
+            width={9}
+            height={17}
+            fill={showArrows.right ? 'var(--color-text-primary)' : 'var(--color-text-disabled)'}
+          />
+        </button>
       </div>
-    );
+    </div>
+  );
 }

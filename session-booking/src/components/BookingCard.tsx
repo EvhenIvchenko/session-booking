@@ -2,7 +2,6 @@
 
 import clsx from 'clsx';
 import Image from 'next/image';
-import { useState } from 'react';
 
 import { useBooking } from '@/hooks/useBooking';
 import { combineDateAndTime, getUnixTimestamp } from '@/utils/dateUtils';
@@ -10,15 +9,11 @@ import { combineDateAndTime, getUnixTimestamp } from '@/utils/dateUtils';
 import { DateSelector } from './DateSelector';
 import { TimeSelector } from './TimeSelector';
 
-import type { TimeSlot } from '@/types/booking';
-
 /**
  * Main booking card component
  * Combines date and time selectors with a confirm button
  */
 export function BookingCard() {
-  const [scrollSignal, setScrollSignal] = useState(0);
-
   const {
     selectedDate,
     selectedTime,
@@ -26,11 +21,6 @@ export function BookingCard() {
     handleTimeSelect,
     isValid,
   } = useBooking();
-
-  const onTimeSelectWrapper = (time: TimeSlot) => {
-    handleTimeSelect(time);
-    setScrollSignal(Date.now());
-  };
 
   const handleConfirm = () => {
     if (!isValid || !selectedDate || !selectedTime) return;
@@ -47,7 +37,7 @@ export function BookingCard() {
   };
 
   return (
-    <div className="relative z-10 flex w-full min-h-[500px] md:min-h-[620px] flex-col justify-between bg-white p-5 -mt-6 rounded-t-[24px] md:mx-auto md:mt-0 md:max-w-[568px] md:rounded-2xl md:shadow-xl md:p-8 2xl:max-w-[750px] [@media(min-width:1920px)]:max-w-[890px]">
+    <div className="relative z-10 flex w-full min-h-[500px] md:min-h-[620px] flex-col justify-between bg-white px-5 py-8 -mt-6 rounded-t-[24px] md:mx-auto md:mt-0 md:max-w-[568px] md:rounded-2xl md:shadow-xl md:px-6 md:py-10 2xl:max-w-[750px] [@media(min-width:1920px)]:max-w-[890px]">
       <div>
         <div className="mb-8 flex items-start gap-4 sm:gap-6">
           <div className="hidden md:block h-[120px] w-[120px] shrink-0 overflow-hidden rounded-full">
@@ -72,17 +62,17 @@ export function BookingCard() {
         <div className="mb-6">
           <DateSelector
             selectedDate={selectedDate}
+            selectedTime={selectedTime}
             onDateSelect={handleDateSelect}
-            scrollToSelectionSignal={scrollSignal}
           />
         </div>
 
         {selectedDate && (
-          <div className="mb-8">
+          <div className="mb-6">
             <TimeSelector
               selectedDate={selectedDate}
               selectedTime={selectedTime}
-              onTimeSelect={onTimeSelectWrapper}
+              onTimeSelect={handleTimeSelect}
             />
           </div>
         )}

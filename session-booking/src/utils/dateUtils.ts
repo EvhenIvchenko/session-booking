@@ -1,5 +1,5 @@
 import {
-  addWeeks,
+  addMonths,
   eachDayOfInterval,
   format,
   isToday,
@@ -8,23 +8,23 @@ import {
 
 import type { DateItem } from '@/types/booking';
 
-const DEFAULT_WEEKS_AHEAD = 6;
-const MIN_WEEKS = 1;
-const MAX_WEEKS = 52;
+const DEFAULT_MONTHS_AHEAD = 3;
+const MIN_MONTHS = 1;
+const MAX_MONTHS = 12;
 
 /**
  * Generates a range of dates for the booking calendar
- * @param weeksAhead - Number of weeks to generate ahead, defaults to 6
+ * @param monthsAhead - Number of months to generate ahead, defaults to 3
  * @returns Array of DateItem objects with formatted date information
- * @throws Error if weeksAhead is out of valid range (1-52)
+ * @throws Error if monthsAhead is out of valid range (1-12)
  */
-export const generateDateRange = (weeksAhead: number = DEFAULT_WEEKS_AHEAD): DateItem[] => {
-  if (weeksAhead < MIN_WEEKS || weeksAhead > MAX_WEEKS) {
-    throw new Error(`weeksAhead must be between ${MIN_WEEKS} and ${MAX_WEEKS}`);
+export const generateDateRange = (monthsAhead: number = DEFAULT_MONTHS_AHEAD): DateItem[] => {
+  if (monthsAhead < MIN_MONTHS || monthsAhead > MAX_MONTHS) {
+    throw new Error(`monthsAhead must be between ${MIN_MONTHS} and ${MAX_MONTHS}`);
   }
 
   const today = startOfDay(new Date());
-  const endDate = addWeeks(today, weeksAhead);
+  const endDate = addMonths(today, monthsAhead);
 
   const dates = eachDayOfInterval({ start: today, end: endDate });
 
