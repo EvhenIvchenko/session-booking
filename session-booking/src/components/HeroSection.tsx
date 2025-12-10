@@ -59,6 +59,7 @@ export function HeroSection() {
             alt="Stylist"
             width={180}
             height={270}
+            priority
             className="h-full w-full object-cover object-top"
           />
         </div>

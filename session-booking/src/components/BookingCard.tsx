@@ -46,6 +46,7 @@ export function BookingCard() {
               alt="Stylist"
               width={120}
               height={120}
+              priority
               className="h-full w-full object-cover"
             />
           </div>
